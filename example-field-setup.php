@@ -33,6 +33,7 @@ function cmb2_attached_posts_field_metaboxes_example() {
 		'type'    => 'custom_attached_posts',
 		'column'  => true, // Output in the admin post-listing as a custom column. https://github.com/CMB2/CMB2/wiki/Field-Parameters#column
 		'options' => array(
+			'from_external' => 'http://www.yourdomain.com/wp-json/wp/v2/posts',
 			'show_thumbnails' => true, // Show thumbnails on the left
 			'filter_boxes'    => true, // Show a text box for filtering the results
 			'query_args'      => array(

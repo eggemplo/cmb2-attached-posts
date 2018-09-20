@@ -127,7 +127,49 @@ class WDS_CMB2_Attached_Posts_Field {
 		// Check to see if we have any meta values saved yet
 		$attached = (array) $escaped_value;
 
-		$objects = $this->get_all_objects( $args, $attached );
+		// ablancodev
+		$from_external = $this->field->options( 'from_external' );
+		if ( $from_external && ( strlen( $from_external ) > 0 ) ) {
+
+			$response = wp_remote_get( add_query_arg( array('per_page' => 10), $from_external ) );
+			if( !is_wp_error( $response ) && $response['response']['code'] == 200 ) {
+
+				$remote_posts = json_decode( $response['body'] ); // our posts are here
+
+				$objects = array();
+				foreach( $remote_posts as $remote_post ) {
+					$objeto = new stdClass();
+					$objeto->ID = $remote_post->id;
+					$objeto->post_date = $remote_post->date;
+					$objeto->post_date_gmt = $remote_post->date_gmt;
+					$objeto->post_content = $remote_post->content->rendered;
+					$objeto->post_title = $remote_post->title->rendered;
+					$objeto->post_excerpt = $remote_post->excerpt->rendered;
+					$objeto->post_status = $remote_post->status;
+					$objeto->comment_status = $remote_post->comment_status;
+					$objeto->post_password = "";
+					$objeto->post_name = $remote_post->id;
+					$objeto->guid = $remote_post->guid->rendered;
+					$objeto->post_modified = $remote_post->modified;
+					$objeto->post_modified_gmt = $remote_post->modified_gmt;
+					$objeto->menu_order = 0;
+					$objeto->post_type = $remote_post->type;
+					$objeto->post_mime_type = "";
+					$objeto->comment_count = 0;
+					$objeto->filter = "raw";
+					$objeto->id_media_remote = $remote_post->featured_media;
+					$objects[] = $objeto;
+					
+					//echo '<h2>RSS:' . $remote_post->title->rendered . '</h2></br>';
+				}
+			} else {
+				echo "Nada de nada desde RSS";
+			}
+
+		} else {
+			// Local posts
+			$objects = $this->get_all_objects( $args, $attached );
+		}
 
 		// If there are no posts found, just stop
 		if ( empty( $objects ) ) {
@@ -285,6 +327,7 @@ class WDS_CMB2_Attached_Posts_Field {
 	 * @return void
 	 */
 	public function list_item( $object, $li_class, $icon_class = 'dashicons-plus' ) {
+		/*
 		// Build our list item
 		printf(
 			'<li data-id="%1$d" class="%2$s" target="_blank">%3$s<a title="' . __( 'Edit' ) . '" href="%4$s">%5$s</a>%6$s<span class="dashicons %7$s add-remove"></span></li>',
@@ -295,6 +338,24 @@ class WDS_CMB2_Attached_Posts_Field {
 			$this->get_title( $object ),
 			$this->get_object_label( $object ),
 			$icon_class
+		);
+		*/
+
+	    // Blancoleon
+	    $titulo = $this->get_title( $object );
+	    if ( $object->post_status == 'future' ) {
+	        $titulo .= ' (programada)';
+	    }
+
+		// Build our list item
+		printf(
+		    '<li data-id="%1$d" class="%2$s" target="_blank">%3$s%4$s%5$s<span class="dashicons %6$s add-remove"></span></li>',
+		    $this->get_id( $object ),
+		    $li_class,
+		    $this->get_thumb( $object ),
+		    $titulo,
+		    $this->get_object_label( $object ),
+		    $icon_class
 		);
 	}
 
@@ -309,14 +370,20 @@ class WDS_CMB2_Attached_Posts_Field {
 	 */
 	public function get_thumb( $object ) {
 		$thumbnail = '';
-
-		if ( $this->field->options( 'show_thumbnails' ) ) {
-			// Set thumbnail if the options is true
-			$thumbnail = $this->field->options( 'query_users' )
-				? get_avatar( $object->ID, 25 )
-				: get_the_post_thumbnail( $object->ID, array( 50, 50 ) );
+		if ( ( $object->id_media_remote ) != "" ) {
+			$response = wp_remote_get('https://estiloyvida.es/wp-json/wp/v2/media/'.$object->id_media_remote);
+			if( !is_wp_error( $response ) && $response['response']['code'] == 200 ) {
+				$remote_medias = json_decode( $response['body'] ); // our media is here
+				$thumbnail = '<img width="50" height="50" class="attachment-50x50 size-50x50 wp-post-image" src="'.$remote_medias->guid->rendered.'">';
+			}
+		}else{
+			if ( $this->field->options( 'show_thumbnails' ) ) {
+				// Set thumbnail if the options is true
+				$thumbnail = $this->field->options( 'query_users' )
+					? get_avatar( $object->ID, 25 )
+					: get_the_post_thumbnail( $object->ID, array( 50, 50 ) );
+			}
 		}
-
 		return $thumbnail;
 	}
 
@@ -393,9 +460,41 @@ class WDS_CMB2_Attached_Posts_Field {
 	 * @return mixed     Post or User if found.
 	 */
 	public function get_object( $id ) {
+		// ablancodev
+		$from_external = $this->field->options( 'from_external' );
+		$post = null;
+		if ( $from_external && ( strlen( $from_external ) > 0 ) ) {
+			// /wp-json/wp/v2/posts/123
+			$response = wp_remote_get( add_query_arg( array('per_page' => 10), $from_external . '/' . $id ) );
+			if( !is_wp_error( $response ) && $response['response']['code'] == 200 ) {
+				$remote_post = json_decode( $response['body'] ); // our posts are here
+				$post = new stdClass();
+				$post->ID = $remote_post->id;
+				$post->post_date = $remote_post->date;
+				$post->post_date_gmt = $remote_post->date_gmt;
+				$post->post_content = $remote_post->content->rendered;
+				$post->post_title = $remote_post->title->rendered;
+				$post->post_excerpt = $remote_post->excerpt->rendered;
+				$post->post_status = $remote_post->status;
+				$post->comment_status = $remote_post->comment_status;
+				$post->post_password = "";
+				$post->post_name = $remote_post->id;
+				$post->guid = $remote_post->guid->rendered;
+				$post->post_modified = $remote_post->modified;
+				$post->post_modified_gmt = $remote_post->modified_gmt;
+				$post->menu_order = 0;
+				$post->post_type = $remote_post->type;
+				$post->post_mime_type = "";
+				$post->comment_count = 0;
+				$post->filter = "raw";
+				$post->id_media_remote = $remote_post->featured_media;
+			}
+		} else {
+			$post = get_post( absint( $id ) );
+		}
 		return $this->field->options( 'query_users' )
 			? get_user_by( 'id', absint( $id ) )
-			: get_post( absint( $id ) );
+			: $post;
 	}
 
 	/**
